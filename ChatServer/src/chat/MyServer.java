@@ -60,6 +60,7 @@ public class MyServer {
     }
 
     public void unSubscribe(ClientHandler clientHandler) {
+
         clients.remove(clientHandler);
     }
 
@@ -72,5 +73,23 @@ public class MyServer {
         }
         return false;
 
+    }
+
+    public void broadcastMessage(String message, ClientHandler sender, boolean isServerInfoMsg) throws IOException {
+        for (ClientHandler client : clients) {
+            if (client == sender) {
+                continue;
+            }
+            client.sendMessage(isServerInfoMsg ? null : sender.getUsername(), message);
+        }
+    }
+
+    public void privateMessage(ClientHandler sender, String username, String message) throws IOException {
+        for (ClientHandler client : clients) {
+            if (client.getUsername().equals(username)) {
+                client.sendMessage(sender.getUsername(), message);
+                return;
+            }
+        }
     }
 }

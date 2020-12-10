@@ -1,11 +1,8 @@
 package chat.auth;
 
 import chat.User;
-
 import java.util.List;
-
 import static com.sun.tools.javac.util.List.of;
-import static java.util.List.*;
 
 
 public class BaseAuthService implements AuthService{
