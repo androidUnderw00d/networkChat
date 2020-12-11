@@ -1,18 +1,15 @@
 package chat.auth;
 
 import chat.User;
+
 import java.util.List;
-import static com.sun.tools.javac.util.List.of;
 
+public class BaseAuthService implements AuthService {
 
-public class BaseAuthService implements AuthService{
-
-    //List.of
-
-    private static final List<User> clients = of(
-            new User("user1", "1111", "Чубакка"),
-            new User("user2", "2222", "Оби-Ван Кеноби"),
-            new User("user3", "3333", "Йода")
+    private static final List<User> clients = List.of(
+            new User("user1", "1111", "Борис_Николаевич"),
+            new User("user2", "2222", "Мартин_Некотов"),
+            new User("user3", "3333", "Гендальф_Серый")
     );
 
     @Override
@@ -33,5 +30,6 @@ public class BaseAuthService implements AuthService{
     @Override
     public void close() {
         System.out.println("Сервис аутентификации завершен");
+
     }
 }

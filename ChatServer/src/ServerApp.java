@@ -4,7 +4,7 @@ import java.io.IOException;
 
 public class ServerApp {
 
-    private static final int DEFAULT_PORT = 8089;
+    private static final int DEFAULT_PORT = 8189;
 
     public static void main(String[] args) {
         int port = DEFAULT_PORT;

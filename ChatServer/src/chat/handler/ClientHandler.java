@@ -2,107 +2,134 @@ package chat.handler;
 
 import chat.MyServer;
 import chat.auth.AuthService;
-import com.sun.xml.internal.ws.api.model.wsdl.WSDLOutput;
+import clientserver.Command;
+import clientserver.CommandType;
+import clientserver.commands.AuthCommandData;
+import clientserver.commands.PrivateMessageCommandData;
+import clientserver.commands.PublicMessageCommandData;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.net.Socket;
+import java.util.Timer;
 
 public class ClientHandler {
 
-    private static final String AUTH_CMD_PREFIX = "/auth";
-    private static final String AUTHOK_CMD_PREFIX = "/authok";
-    private static final String AUTHERR_CMD_PREFIX = "/autherr";
-    // для домашней работы
-    private static final String PRIVATE_MSG_PREFIX = "/w";
-    private static final String CLIENT_MSG_PREFIX = "/clientMsg";
-    private static final String SERVER_MSG_PREFIX = "/serverMsg";
-    private static final String END_CMD = "/end";
-
-
     private final MyServer myServer;
     private final Socket clientSocket;
-    private DataInputStream in;
-    private DataOutputStream out;
+    private ObjectInputStream in;
+    private ObjectOutputStream out;
     private String username;
 
     public ClientHandler(MyServer myServer, Socket clientSocket) {
         this.myServer = myServer;
         this.clientSocket = clientSocket;
-
     }
 
     public void handle() throws IOException {
-        in = new DataInputStream(clientSocket.getInputStream());
-        out = new DataOutputStream(clientSocket.getOutputStream());
+        in = new ObjectInputStream(clientSocket.getInputStream());
+        out = new ObjectOutputStream(clientSocket.getOutputStream());
 
+//        new Timer().schedule();
         new Thread(() -> {
-            //аутентификация
             try {
-                authentification();
-                readMessage();    // ожидание и чтение сообщения
+                authentication();
+                readMessage();
             } catch (IOException e) {
-                e.printStackTrace();
                 System.out.println(e.getMessage());
             }
+
         }).start();
 
     }
 
-    private void authentification() throws IOException {
-        String message = in.readUTF();
+    private void authentication() throws IOException {
 
         while (true) {
-            if (message.startsWith(AUTH_CMD_PREFIX)) {
-                String[] parts = message.split("\\s+", 3);
-                String login = parts[1];
-                String password = parts[2];
 
-                //процесс аутентификации
-                AuthService authService = myServer.getAuthService();
-                username = authService.getUsernameByLoginAndPassword(login, password);
-                if (username != null) {
-                    // проверить ли не занят ли ник нейм
-                    if (myServer.isUsernameBusy(username)) {
-                        out.writeUTF(String.format("%s %s", AUTHERR_CMD_PREFIX, "Логин уже используется"));
-                    }
+            Command command = readCommand();
+            if (command == null) {
+                continue;
+            }
+            if (command.getType() == CommandType.AUTH) {
 
-                    //отправить на клиент никнейм
-                    out.writeUTF(String.format("%s %s", AUTHOK_CMD_PREFIX, username));
-
-                    //оповестить о подключении новичка никнейм
-                    myServer.broadcastMessage(String.format(">>> %s подключился к чату", username), this, true);
-
-                    //зарегестрировать клиента
-                    myServer.subscribe(this);
+                boolean isSuccessAuth = processAuthCommand(command);
+                if (isSuccessAuth) {
                     break;
-                } else {
-                    out.writeUTF(String.format("%s %s", AUTHERR_CMD_PREFIX, "Логин или пароль не верны"));
                 }
+
             } else {
-                out.writeUTF(String.format("%s %s", AUTHERR_CMD_PREFIX, "Ошибка авторизации"));
+                sendMessage(Command.authErrorCommand("Ошибка авторизации"));
 
             }
+        }
+
+    }
+
+    private boolean processAuthCommand(Command command) throws IOException {
+        AuthCommandData cmdData = (AuthCommandData) command.getData();
+        String login = cmdData.getLogin();
+        String password = cmdData.getPassword();
+
+        AuthService authService = myServer.getAuthService();
+        this.username = authService.getUsernameByLoginAndPassword(login, password);
+        if (username != null) {
+            if (myServer.isUsernameBusy(username)) {
+                sendMessage(Command.authErrorCommand("Логин уже используется"));
+                return false;
+            }
+
+            sendMessage(Command.authOkCommand(username));
+            String message = String.format(">>> %s присоединился к чату", username);
+            myServer.broadcastMessage(this, Command.messageInfoCommand(message, null));
+            myServer.subscribe(this);
+            return true;
+        } else {
+            sendMessage(Command.authErrorCommand("Логин или пароль не соответствуют действительности"));
+            return false;
+        }
+    }
+
+    private Command readCommand() throws IOException {
+        try {
+            return (Command) in.readObject();
+        } catch (ClassNotFoundException e) {
+            String errorMessage = "Получен неизвестный объект";
+            System.err.println(errorMessage);
+            e.printStackTrace();
+            return null;
         }
     }
 
     private void readMessage() throws IOException {
-        while (true){
-            String message = in.readUTF();
-            System.out.println("message | " + username + ": " + message);
-            if (message.startsWith(END_CMD)){
-                return;
+        while (true) {
+            Command command = readCommand();
+            if (command == null) {
+                continue;
             }
-            else if(message.startsWith(PRIVATE_MSG_PREFIX)){
-                //TODO что-то сделать в случае приватного сообщения
-                String[] parts = message.split("\\s+", 4);
-                String username = parts[2];
-                message = parts[3];
-                myServer.privateMessage(this, username, message);
-            }
-            else { //во всех остальных случаях
-                myServer.broadcastMessage(message,this, false); //this - данный текущий хендлер
+
+            switch (command.getType()) {
+                case END:
+                    myServer.unSubscribe(this);
+                    return;
+                case PUBLIC_MESSAGE: {
+                    PublicMessageCommandData data = (PublicMessageCommandData) command.getData();
+                    String message = data.getMessage();
+                    String sender = data.getSender();
+                    myServer.broadcastMessage(this, Command.messageInfoCommand(message, sender));
+                    break;
+                }
+                case PRIVATE_MESSAGE:
+                    PrivateMessageCommandData data = (PrivateMessageCommandData) command.getData();
+                    String recipient = data.getReceiver();
+                    String message = data.getMessage();
+                    myServer.sendPrivateMessage(recipient, Command.messageInfoCommand(message, username));
+                    break;
+                default:
+                    String errorMessage = "Неизвестный тип команды" + command.getType();
+                    System.err.println(errorMessage);
+                    sendMessage(Command.errorCommand(errorMessage));
             }
         }
     }
@@ -111,13 +138,7 @@ public class ClientHandler {
         return username;
     }
 
-    //доработать в ДЗ логику реагирования на отосланый с клиента запрос о том что нужно отправить личное сообщение конкретному Хендлеру
-    public void sendMessage(String sender, String message) throws IOException {
-        if (sender == null) {
-            out.writeUTF(String.format("%s %s", SERVER_MSG_PREFIX, message));
-        } else {
-            out.writeUTF(String.format("%s %s %s", CLIENT_MSG_PREFIX, sender, message)); //если отправляется личное сообщение клииента префикс никнейм само сообщение
-
-        }
+    public void sendMessage(Command command) throws IOException {
+        out.writeObject(command);
     }
 }
