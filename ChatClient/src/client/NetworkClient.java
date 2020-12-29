@@ -12,8 +12,13 @@ import javafx.scene.control.Alert;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 
+import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.List;
+import java.util.stream.Collectors;
 
 
 public class NetworkClient extends Application {
@@ -94,6 +99,22 @@ public class NetworkClient extends Application {
         primaryStage.setAlwaysOnTop(true);
         chatController.setLabel(network.getUsername());
         network.waitMessage(chatController);
+
+        //TODO чтение последних 100 строк
+
+        try {
+            File file = new File("ChatClient/src/client/controllers/history.txt");
+            FileReader reader = new FileReader(file);
+            List<String> lines = Files.lines(Paths.get("ChatClient/src/client/controllers/history.txt")).collect(Collectors.toList());
+            int count = lines.size();
+            int lastHundredLines = (count - 100);
+            for (int i = lastHundredLines; i < count; i++) {
+                chatController.appendMessage(lines.get(i));
+            }
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
 }

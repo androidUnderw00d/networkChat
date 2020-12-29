@@ -6,6 +6,8 @@ import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
 
+import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.text.DateFormat;
 import java.util.Date;
@@ -41,10 +43,19 @@ public class ChatController {
         textField.setOnAction(event -> ChatController.this.sendMessage());
     }
 
+
     private void sendMessage() {
         String message = textField.getText();
         appendMessage("Я: " + message);
         textField.clear();
+
+        File file = new File("ChatClient/src/client/controllers/history.txt");
+
+        try (FileWriter writer = new FileWriter(file, true)) {
+            writer.write(message + System.lineSeparator());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
         try {
             network.sendMessage(message);
