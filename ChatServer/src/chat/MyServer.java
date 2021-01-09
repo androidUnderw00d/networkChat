@@ -3,6 +3,8 @@ package chat;
 import chat.auth.AuthService;
 import chat.auth.BaseAuthService;
 import chat.handler.ClientHandler;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.Logger;
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -12,6 +14,7 @@ import java.util.List;
 
 public class MyServer {
 
+    private static final Logger LOGGER = (Logger) LogManager.getLogger();
     private final ServerSocket serverSocket;
     private final AuthService authService;
     private final List<ClientHandler> clients = new ArrayList<>();
@@ -25,7 +28,16 @@ public class MyServer {
 
     public void start() throws IOException {
 
+        Logger logger = (Logger) LogManager.getLogger();
+
+//        logger.debug( "Debug" );
+//        logger.info( "Info" );
+//        logger.warn( "Warn" );
+//        logger.error( "Error" );
+//        logger.fatal( "Fatal" );
+
         System.out.println("Сервер запущен!");
+        logger.info("Сервер запущен!");
         authService.start();
 
         try {
